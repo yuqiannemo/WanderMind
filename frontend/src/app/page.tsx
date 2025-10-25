@@ -1,20 +1,52 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, MapPin, Brain, Plane, LogIn, UserPlus } from 'lucide-react';
+import { Sparkles, MapPin, Brain, Plane, LogIn, UserPlus, LogOut, User as UserIcon } from 'lucide-react';
 import Logo from '@/components/Logo';
+import AuthModal from '@/components/AuthModal';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Home() {
   const router = useRouter();
   const [showButtons, setShowButtons] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [particles, setParticles] = useState<Array<{
+    id: number;
+    size: number;
+    initialX: number;
+    initialY: number;
+    duration: number;
+    delay: number;
+  }>>([]);
+  const { user, logout } = useAuth();
+
+  // Generate particles on client side only to avoid hydration mismatch
+  useEffect(() => {
+    setParticles(
+      Array.from({ length: 20 }, (_, i) => ({
+        id: i,
+        size: Math.random() * 4 + 2,
+        initialX: Math.random() * 100,
+        initialY: Math.random() * 100,
+        duration: Math.random() * 10 + 10,
+        delay: Math.random() * 5,
+      }))
+    );
+  }, []);
 
   // Show buttons after animation
-  useState(() => {
+  useEffect(() => {
     const timer = setTimeout(() => setShowButtons(true), 2500);
     return () => clearTimeout(timer);
-  });
+  }, []);
+
+  const openAuthModal = (mode: 'login' | 'signup') => {
+    setAuthMode(mode);
+    setAuthModalOpen(true);
+  };
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -46,16 +78,6 @@ export default function Home() {
       },
     },
   };
-
-  // Particle animation
-  const particles = Array.from({ length: 20 }, (_, i) => ({
-    id: i,
-    size: Math.random() * 4 + 2,
-    initialX: Math.random() * 100,
-    initialY: Math.random() * 100,
-    duration: Math.random() * 10 + 10,
-    delay: Math.random() * 5,
-  }));
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800">
@@ -121,24 +143,47 @@ export default function Home() {
             transition={{ duration: 0.5 }}
             className="absolute top-6 right-6 flex gap-3 z-20"
           >
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => {/* TODO: Add login logic */}}
-              className="flex items-center gap-2 px-5 py-2.5 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white font-medium hover:bg-white/20 transition-all shadow-lg"
-            >
-              <LogIn className="w-4 h-4" />
-              Login
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => {/* TODO: Add signup logic */}}
-              className="flex items-center gap-2 px-5 py-2.5 bg-white text-purple-900 rounded-full font-semibold hover:bg-white/90 transition-all shadow-lg"
-            >
-              <UserPlus className="w-4 h-4" />
-              Sign Up
-            </motion.button>
+            {user ? (
+              <>
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white font-medium"
+                >
+                  <UserIcon className="w-4 h-4" />
+                  {user.name}
+                </motion.div>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={logout}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white font-medium hover:bg-white/20 transition-all shadow-lg"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Logout
+                </motion.button>
+              </>
+            ) : (
+              <>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => openAuthModal('login')}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white font-medium hover:bg-white/20 transition-all shadow-lg"
+                >
+                  <LogIn className="w-4 h-4" />
+                  Login
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => openAuthModal('signup')}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-white text-purple-900 rounded-full font-semibold hover:bg-white/90 transition-all shadow-lg"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Sign Up
+                </motion.button>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -268,6 +313,13 @@ export default function Home() {
         initial={{ scaleX: 0 }}
         animate={{ scaleX: 1 }}
         transition={{ duration: 2, delay: 1 }}
+      />
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        initialMode={authMode}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
@@ -10,6 +10,11 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from geopy.geocoders import Nominatim
 import logging
+from auth import (
+    UserCreate, UserLogin, User, UserInDB, Token, TokenData,
+    users_db, get_user, authenticate_user, create_access_token,
+    decode_token, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES
+)
 
 # Load environment variables
 load_dotenv()
@@ -37,6 +42,9 @@ client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 # In-memory session storage (replace with Redis/DB for production)
 sessions = {}
 
+# In-memory trip plan storage
+trip_plans = {}  # user_email -> list of saved plans
+
 # Geocoder for location coordinates
 geolocator = Nominatim(user_agent="wandermind")
 
@@ -56,6 +64,7 @@ class UserSession(BaseModel):
     endDate: str
     interests: List[str]
     cityCoordinates: Optional[List[float]] = None
+    userId: Optional[str] = None
 
 
 class Attraction(BaseModel):
@@ -101,6 +110,24 @@ class RefineRequest(BaseModel):
     session_id: str
     message: str
     current_route: TravelRoute
+
+
+class SavedTripPlan(BaseModel):
+    id: str
+    userId: str
+    city: str
+    startDate: str
+    endDate: str
+    interests: List[str]
+    route: TravelRoute
+    savedAt: str
+    title: Optional[str] = None
+
+
+class SavePlanRequest(BaseModel):
+    session_id: str
+    route: TravelRoute
+    title: Optional[str] = None
 
 
 # Helper functions
@@ -163,19 +190,153 @@ def call_claude(prompt: str, system_prompt: str = None) -> str:
         raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
 
 
+# Authentication helper
+async def get_current_user(authorization: Optional[str] = Header(None)) -> Optional[User]:
+    """Get current user from JWT token."""
+    logger.info(f"get_current_user called with authorization: {authorization[:20] if authorization else 'None'}...")
+    
+    if not authorization:
+        logger.warning("No authorization header provided")
+        return None
+    
+    try:
+        scheme, token = authorization.split()
+        if scheme.lower() != "bearer":
+            logger.warning(f"Invalid auth scheme: {scheme}")
+            return None
+        
+        token_data = decode_token(token)
+        if not token_data or not token_data.email:
+            logger.warning("Invalid or expired token")
+            return None
+        
+        user = get_user(token_data.email)
+        if not user:
+            logger.warning(f"User not found for email: {token_data.email}")
+            return None
+        
+        # Return User model (without password)
+        logger.info(f"User authenticated: {user.email}")
+        return User(
+            id=user.id,
+            email=user.email,
+            name=user.name,
+            interests=user.interests,
+            created_at=user.created_at
+        )
+    except Exception as e:
+        logger.error(f"Error in get_current_user: {e}")
+        return None
+
+
 # Endpoints
 @app.get("/")
 def read_root():
     return {"message": "WanderMind API is running"}
 
 
+# Authentication endpoints
+@app.post("/api/auth/signup", response_model=Token)
+async def signup(user_data: UserCreate):
+    """Register a new user."""
+    if get_user(user_data.email):
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    user_id = str(uuid.uuid4())
+    hashed_password = get_password_hash(user_data.password)
+    
+    user_in_db = {
+        "id": user_id,
+        "email": user_data.email,
+        "name": user_data.name,
+        "hashed_password": hashed_password,
+        "interests": [],
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    
+    users_db[user_data.email] = user_in_db
+    
+    # Create access token
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user_data.email}, expires_delta=access_token_expires
+    )
+    
+    user = User(
+        id=user_id,
+        email=user_data.email,
+        name=user_data.name,
+        interests=[],
+        created_at=user_in_db["created_at"]
+    )
+    
+    return Token(access_token=access_token, token_type="bearer", user=user)
+
+
+@app.post("/api/auth/login", response_model=Token)
+async def login(credentials: UserLogin):
+    """Login user."""
+    user = authenticate_user(credentials.email, credentials.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+    
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.email}, expires_delta=access_token_expires
+    )
+    
+    user_data = User(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        interests=user.interests,
+        created_at=user.created_at
+    )
+    
+    return Token(access_token=access_token, token_type="bearer", user=user_data)
+
+
+@app.get("/api/auth/me", response_model=User)
+async def get_me(current_user: Optional[User] = Depends(get_current_user)):
+    """Get current user info."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return current_user
+
+
+@app.put("/api/auth/preferences")
+async def update_preferences(
+    interests: List[str],
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Update user interests/preferences."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if current_user.email in users_db:
+        users_db[current_user.email]["interests"] = interests
+        return {"message": "Preferences updated successfully", "interests": interests}
+    
+    raise HTTPException(status_code=404, detail="User not found")
+
+
 @app.post("/api/init", response_model=UserSession)
-async def initialize_session(request: InitRequest):
+async def initialize_session(
+    request: InitRequest,
+    current_user: Optional[User] = Depends(get_current_user)
+):
     """Initialize a new travel planning session."""
     session_id = str(uuid.uuid4())
     
     # Get city coordinates
     city_coords = get_coordinates(request.city)
+    
+    # Auto-save preferences if user is logged in
+    user_id = None
+    if current_user:
+        user_id = current_user.id
+        if current_user.email in users_db:
+            users_db[current_user.email]["interests"] = request.interests
     
     session = {
         "sessionId": session_id,
@@ -184,6 +345,7 @@ async def initialize_session(request: InitRequest):
         "endDate": request.endDate,
         "interests": request.interests,
         "cityCoordinates": city_coords,
+        "userId": user_id,
     }
     
     sessions[session_id] = session
@@ -465,6 +627,90 @@ Return ONLY valid JSON, no other text."""
     except json.JSONDecodeError as e:
         logger.error(f"JSON decode error: {e}\nResponse: {response}")
         raise HTTPException(status_code=500, detail="Failed to parse AI response")
+
+
+@app.post("/api/plans/save", response_model=SavedTripPlan)
+async def save_trip_plan(
+    request: SavePlanRequest,
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Save a trip plan to user's history."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    session = sessions.get(request.session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    plan_id = str(uuid.uuid4())
+    title = request.title or f"{session['city']} Trip - {datetime.now().strftime('%B %Y')}"
+    
+    saved_plan = {
+        "id": plan_id,
+        "userId": current_user.id,
+        "city": session['city'],
+        "startDate": session['startDate'],
+        "endDate": session['endDate'],
+        "interests": session['interests'],
+        "route": request.route.dict(),
+        "savedAt": datetime.utcnow().isoformat(),
+        "title": title,
+    }
+    
+    # Initialize user's plan list if it doesn't exist
+    if current_user.email not in trip_plans:
+        trip_plans[current_user.email] = []
+    
+    trip_plans[current_user.email].append(saved_plan)
+    
+    logger.info(f"Saved trip plan {plan_id} for user {current_user.email}")
+    return SavedTripPlan(**saved_plan)
+
+
+@app.get("/api/plans", response_model=List[SavedTripPlan])
+async def get_user_plans(current_user: Optional[User] = Depends(get_current_user)):
+    """Get all saved trip plans for the current user."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    user_plans = trip_plans.get(current_user.email, [])
+    return [SavedTripPlan(**plan) for plan in user_plans]
+
+
+@app.get("/api/plans/{plan_id}", response_model=SavedTripPlan)
+async def get_plan_by_id(
+    plan_id: str,
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Get a specific trip plan by ID."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    user_plans = trip_plans.get(current_user.email, [])
+    for plan in user_plans:
+        if plan['id'] == plan_id:
+            return SavedTripPlan(**plan)
+    
+    raise HTTPException(status_code=404, detail="Plan not found")
+
+
+@app.delete("/api/plans/{plan_id}")
+async def delete_plan(
+    plan_id: str,
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Delete a saved trip plan."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if current_user.email not in trip_plans:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    
+    user_plans = trip_plans[current_user.email]
+    trip_plans[current_user.email] = [p for p in user_plans if p['id'] != plan_id]
+    
+    logger.info(f"Deleted trip plan {plan_id} for user {current_user.email}")
+    return {"message": "Plan deleted successfully"}
 
 
 if __name__ == "__main__":
