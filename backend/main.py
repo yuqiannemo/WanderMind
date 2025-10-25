@@ -147,8 +147,10 @@ def get_coordinates(city: str, attraction_name: str = None):
 def call_claude(prompt: str, system_prompt: str = None) -> str:
     """Call Claude API with the given prompt."""
     try:
+        # Use claude-3-haiku-20240307 (works with free tier API keys)
+        # For production, upgrade to claude-3-5-sonnet-20241022 for better results
         message = client.messages.create(
-            model="claude-3-5-sonnet-20240620",
+            model="claude-3-haiku-20240307",
             max_tokens=4096,
             system=system_prompt if system_prompt else "You are a helpful travel planning assistant.",
             messages=[{"role": "user", "content": prompt}]
