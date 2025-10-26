@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Compass, MapPin, Calendar, Heart, ArrowRight } from 'lucide-react';
+import { Compass, MapPin, Calendar, Heart, ArrowRight, X } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 const popularInterests = [
   'Historical Sites',
@@ -23,6 +24,7 @@ const popularInterests = [
 
 export default function OnboardPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [city, setCity] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -30,12 +32,23 @@ export default function OnboardPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Load saved preferences if user is logged in
+  useEffect(() => {
+    if (user && user.interests && user.interests.length > 0) {
+      setSelectedInterests(user.interests);
+    }
+  }, [user]);
+
   const toggleInterest = (interest: string) => {
     setSelectedInterests((prev) =>
       prev.includes(interest)
         ? prev.filter((i) => i !== interest)
         : [...prev, interest]
     );
+  };
+
+  const clearAllInterests = () => {
+    setSelectedInterests([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -185,10 +198,27 @@ export default function OnboardPage() {
               transition={{ delay: 0.3 }}
               className="glass-effect rounded-2xl p-6"
             >
-              <label className="flex items-center gap-2 text-slate-700 font-semibold mb-4">
-                <Heart className="w-5 h-5 text-blue-600" />
-                Your Interests
-              </label>
+              <div className="flex items-center justify-between mb-4">
+                <label className="flex items-center gap-2 text-slate-700 font-semibold">
+                  <Heart className="w-5 h-5 text-blue-600" />
+                  Your Interests
+                  {user && selectedInterests.length > 0 && (
+                    <span className="text-xs text-slate-500 font-normal">
+                      (from your saved preferences)
+                    </span>
+                  )}
+                </label>
+                {selectedInterests.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearAllInterests}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all"
+                  >
+                    <X className="w-4 h-4" />
+                    Clear All
+                  </button>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2">
                 {popularInterests.map((interest) => (
                   <button

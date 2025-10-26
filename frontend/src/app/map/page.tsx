@@ -12,11 +12,15 @@ import {
   Loader2,
   ChevronRight,
   ChevronLeft,
+  History,
+  Star,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { UserSession, Attraction, TravelRoute, Message } from '@/types';
 import ChatPanel from '@/components/ChatPanel';
 import RouteTimeline from '@/components/RouteTimeline';
+import PlanHistorySidebar from '@/components/PlanHistorySidebar';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Dynamically import MapComponent to avoid SSR issues
 const MapComponent = dynamic(() => import('@/components/MapComponent'), {
@@ -30,6 +34,7 @@ const MapComponent = dynamic(() => import('@/components/MapComponent'), {
 
 export default function MapPage() {
   const router = useRouter();
+  const { user, token } = useAuth();
   const [session, setSession] = useState<UserSession | null>(null);
   const [attractions, setAttractions] = useState<Attraction[]>([]);
   const [route, setRoute] = useState<TravelRoute | null>(null);
@@ -38,6 +43,8 @@ export default function MapPage() {
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(true);
   const [showChat, setShowChat] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
+  const [showHistorySidebar, setShowHistorySidebar] = useState(false);
+  const [isSavingPlan, setIsSavingPlan] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number]>([48.8566, 2.3522]);
 
   useEffect(() => {
@@ -187,14 +194,57 @@ export default function MapPage() {
     }
   };
 
+  const handleSavePlan = async () => {
+    if (!route || !session || !user || !token) {
+      alert('Please log in to save your plan');
+      return;
+    }
+
+    setIsSavingPlan(true);
+    try {
+      console.log('Saving plan with token:', token ? 'Token present' : 'No token');
+      await api.savePlan(session.sessionId, route, null, token);
+      alert('Plan saved successfully!');
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: '✅ Your trip plan has been saved! You can view it anytime from your history.',
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (error: any) {
+      console.error('Failed to save plan:', error);
+      const errorMsg = error.response?.data?.detail || error.message || 'Failed to save plan';
+      alert(errorMsg);
+    } finally {
+      setIsSavingPlan(false);
+    }
+  };
+
   const selectedCount = attractions.filter((a) => a.selected).length;
 
   return (
     <div className="h-screen flex flex-col">
+      {/* History Sidebar */}
+      <PlanHistorySidebar 
+        isOpen={showHistorySidebar} 
+        onClose={() => setShowHistorySidebar(false)} 
+      />
+
       {/* Header */}
       <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 z-10">
         <div className="px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
+            {user && (
+              <button
+                onClick={() => setShowHistorySidebar(true)}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                title="View Trip History"
+              >
+                <History className="w-5 h-5 text-slate-600" />
+              </button>
+            )}
             <Compass className="w-8 h-8 text-blue-600" />
             <div>
               <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
@@ -322,7 +372,21 @@ export default function MapPage() {
               </div>
 
               {route && (
-                <div className="absolute right-4 top-4 z-[1000]">
+                <div className="absolute right-4 top-4 z-[1000] flex flex-col gap-2">
+                  {user && (
+                    <button
+                      onClick={handleSavePlan}
+                      disabled={isSavingPlan}
+                      className="glass-effect w-12 h-12 rounded-xl flex items-center justify-center text-yellow-500 hover:shadow-lg transition-all disabled:opacity-50"
+                      title="Save Plan"
+                    >
+                      {isSavingPlan ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Star className="w-5 h-5 fill-yellow-500" />
+                      )}
+                    </button>
+                  )}
                   <button
                     onClick={() => setShowTimeline(!showTimeline)}
                     className="glass-effect w-12 h-12 rounded-xl flex items-center justify-center text-slate-700 hover:shadow-lg transition-all"
