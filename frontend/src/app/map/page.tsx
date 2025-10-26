@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
 import {
-  Compass,
   Sparkles,
   Map as MapIcon,
   MessageSquare,
@@ -47,6 +46,7 @@ export default function MapPage() {
   const [showHistorySidebar, setShowHistorySidebar] = useState(false);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number]>([48.8566, 2.3522]);
+  const [isViewingsavedPlan, setIsViewingsavedPlan] = useState(false); // Track if viewing a saved plan
 
   useEffect(() => {
     const sessionData = localStorage.getItem('wandermind_session');
@@ -63,9 +63,59 @@ export default function MapPage() {
       setMapCenter(parsedSession.cityCoordinates as [number, number]);
     }
 
-    // Load recommendations
+    // Check if this is a saved plan being loaded (has route data in localStorage or needs to be fetched)
+    loadSessionData(parsedSession);
+  }, [router, user, token]);
+
+  const loadSessionData = async (parsedSession: any) => {
+    // If this is explicitly marked as a saved plan, fetch the plan details
+    if (parsedSession.isSavedPlan && user && token) {
+      try {
+        const plan = await api.getPlanById(parsedSession.sessionId, token);
+        if (plan && plan.route) {
+          // This is a saved plan, load the route directly
+          setRoute(plan.route);
+          setShowTimeline(true);
+          setIsLoadingRecommendations(false);
+          setIsViewingsavedPlan(true); // Mark as viewing saved plan
+          
+          // Extract attractions from the route
+          const routeAttractions = plan.route.stops.map((stop: any) => ({
+            ...stop.attraction,
+            selected: true,
+          }));
+          setAttractions(routeAttractions);
+          
+          // Set map center to first stop if available
+          if (plan.route.stops?.[0]?.attraction?.coordinates) {
+            setMapCenter(plan.route.stops[0].attraction.coordinates as [number, number]);
+          }
+          
+          setMessages([
+            {
+              role: 'assistant',
+              content: `Welcome back! Here's your saved trip plan for ${plan.city}. You have ${plan.route.stops.length} stops planned. You can view your complete route and timeline.`,
+              timestamp: new Date(),
+            },
+          ]);
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to load saved plan:', error);
+        setMessages([
+          {
+            role: 'assistant',
+            content: 'Sorry, I had trouble loading your saved plan. Starting fresh...',
+            timestamp: new Date(),
+          },
+        ]);
+      }
+    }
+    
+    // Normal flow: load recommendations for a new session
+    setIsViewingsavedPlan(false);
     loadRecommendations(parsedSession.sessionId);
-  }, [router]);
+  };
 
   const loadRecommendations = async (sessionId: string) => {
     try {
@@ -156,7 +206,25 @@ export default function MapPage() {
   };
 
   const handleSendMessage = async (message: string) => {
-    if (!session || !route) return;
+    if (!session) return;
+
+    // Disable chat refinement for saved plans (no active backend session)
+    if (isViewingsavedPlan) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'user',
+          content: message,
+          timestamp: new Date(),
+        },
+        {
+          role: 'assistant',
+          content: 'Chat refinement is not available for saved plans. To make changes, please create a new trip plan.',
+          timestamp: new Date(),
+        },
+      ]);
+      return;
+    }
 
     setMessages((prev) => [
       ...prev,
@@ -169,24 +237,49 @@ export default function MapPage() {
 
     try {
       setIsLoading(true);
-      const refinedRoute = await api.refineRoute(session.sessionId, message, route);
-      setRoute(refinedRoute);
       
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: refinedRoute.summary,
-          timestamp: new Date(),
-        },
-      ]);
+      // If no route exists yet, provide general advice and suggestions
+      if (!route) {
+        // For now, provide a helpful response about planning
+        // In the future, this could call a general chat endpoint
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: `Great question! I can help you plan your trip to ${session.city}. Right now, I've shown you some amazing attractions on the map. Here's what you can do:
+
+1. **Browse the attractions** - Click on the markers to learn more about each place
+2. **Select your favorites** - Click on attractions to add them to your trip (you need at least 2)
+3. **Generate a route** - Once you've selected attractions, click "Generate Route" to create an optimized itinerary
+4. **Refine your plan** - After generating a route, you can chat with me to make adjustments
+
+Is there anything specific you'd like to know about ${session.city}?`,
+            timestamp: new Date(),
+          },
+        ]);
+      } else {
+        // Route exists, refine it based on the user's message
+        const refinedRoute = await api.refineRoute(session.sessionId, message, route);
+        setRoute(refinedRoute);
+        
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: refinedRoute.summary,
+            timestamp: new Date(),
+          },
+        ]);
+      }
     } catch (error) {
-      console.error('Failed to refine route:', error);
+      console.error('Failed to process message:', error);
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
-          content: 'Sorry, I had trouble refining your route. Please try again.',
+          content: route 
+            ? 'Sorry, I had trouble refining your route. Please try again.'
+            : 'Sorry, I had trouble processing your message. Please try again.',
           timestamp: new Date(),
         },
       ]);
@@ -257,7 +350,6 @@ export default function MapPage() {
               </button>
             )}
             <div className="flex items-center gap-2">
-              <Compass className="w-8 h-8 text-blue-600" />
               <div>
                 <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                   WanderMind
@@ -317,6 +409,8 @@ export default function MapPage() {
                 messages={messages}
                 onSendMessage={handleSendMessage}
                 isLoading={isLoading}
+                disabled={isViewingsavedPlan}
+                disabledMessage="You're viewing a saved plan. Chat refinement is only available for active trip planning sessions."
               />
             </motion.div>
           )}
