@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar, MapPin, Clock, Trash2, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,6 +25,7 @@ interface PlanHistorySidebarProps {
 }
 
 export default function PlanHistorySidebar({ isOpen, onClose }: PlanHistorySidebarProps) {
+  const router = useRouter();
   const { user, token } = useAuth();
   const [plans, setPlans] = useState<SavedPlan[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -72,6 +74,30 @@ export default function PlanHistorySidebar({ isOpen, onClose }: PlanHistorySideb
       day: 'numeric',
       year: 'numeric'
     });
+  };
+
+  const handleViewPlan = (plan: SavedPlan) => {
+    // Store the session and route data to localStorage so map page can load it
+    const sessionData = {
+      sessionId: plan.id,
+      city: plan.city,
+      startDate: plan.startDate,
+      endDate: plan.endDate,
+      interests: plan.interests,
+      cityCoordinates: plan.route.stops?.[0]?.attraction?.coordinates || null,
+      isSavedPlan: true, // Flag to indicate this is a saved plan
+    };
+    localStorage.setItem('wandermind_session', JSON.stringify(sessionData));
+    
+    // Close sidebar
+    onClose();
+    
+    // If already on map page, force a full reload to re-run useEffect
+    if (window.location.pathname === '/map') {
+      window.location.reload();
+    } else {
+      router.push('/map');
+    }
   };
 
   return (
@@ -182,7 +208,10 @@ export default function PlanHistorySidebar({ isOpen, onClose }: PlanHistorySideb
                         )}
                       </div>
 
-                      <button className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2 bg-white text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 transition-all">
+                      <button 
+                        onClick={() => handleViewPlan(plan)}
+                        className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2 bg-white text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 transition-all"
+                      >
                         View Details
                         <ChevronRight className="w-4 h-4" />
                       </button>

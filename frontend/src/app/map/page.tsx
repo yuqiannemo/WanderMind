@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
 import {
-  Compass,
   Sparkles,
   Map as MapIcon,
   MessageSquare,
@@ -14,6 +13,7 @@ import {
   ChevronLeft,
   History,
   Star,
+  ArrowLeft,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { UserSession, Attraction, TravelRoute, Message } from '@/types';
@@ -41,11 +41,12 @@ export default function MapPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(true);
-  const [showChat, setShowChat] = useState(false);
+  const [showChat, setShowChat] = useState(true); // Chat expanded by default
   const [showTimeline, setShowTimeline] = useState(false);
   const [showHistorySidebar, setShowHistorySidebar] = useState(false);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number]>([48.8566, 2.3522]);
+  const [isViewingsavedPlan, setIsViewingsavedPlan] = useState(false); // Track if viewing a saved plan
 
   useEffect(() => {
     const sessionData = localStorage.getItem('wandermind_session');
@@ -62,9 +63,59 @@ export default function MapPage() {
       setMapCenter(parsedSession.cityCoordinates as [number, number]);
     }
 
-    // Load recommendations
+    // Check if this is a saved plan being loaded (has route data in localStorage or needs to be fetched)
+    loadSessionData(parsedSession);
+  }, [router, user, token]);
+
+  const loadSessionData = async (parsedSession: any) => {
+    // If this is explicitly marked as a saved plan, fetch the plan details
+    if (parsedSession.isSavedPlan && user && token) {
+      try {
+        const plan = await api.getPlanById(parsedSession.sessionId, token);
+        if (plan && plan.route) {
+          // This is a saved plan, load the route directly
+          setRoute(plan.route);
+          setShowTimeline(true);
+          setIsLoadingRecommendations(false);
+          setIsViewingsavedPlan(true); // Mark as viewing saved plan
+          
+          // Extract attractions from the route
+          const routeAttractions = plan.route.stops.map((stop: any) => ({
+            ...stop.attraction,
+            selected: true,
+          }));
+          setAttractions(routeAttractions);
+          
+          // Set map center to first stop if available
+          if (plan.route.stops?.[0]?.attraction?.coordinates) {
+            setMapCenter(plan.route.stops[0].attraction.coordinates as [number, number]);
+          }
+          
+          setMessages([
+            {
+              role: 'assistant',
+              content: `Welcome back! Here's your saved trip plan for ${plan.city}. You have ${plan.route.stops.length} stops planned. You can view your complete route and timeline.`,
+              timestamp: new Date(),
+            },
+          ]);
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to load saved plan:', error);
+        setMessages([
+          {
+            role: 'assistant',
+            content: 'Sorry, I had trouble loading your saved plan. Starting fresh...',
+            timestamp: new Date(),
+          },
+        ]);
+      }
+    }
+    
+    // Normal flow: load recommendations for a new session
+    setIsViewingsavedPlan(false);
     loadRecommendations(parsedSession.sessionId);
-  }, [router]);
+  };
 
   const loadRecommendations = async (sessionId: string) => {
     try {
@@ -155,7 +206,7 @@ export default function MapPage() {
   };
 
   const handleSendMessage = async (message: string) => {
-    if (!session || !route) return;
+    if (!session) return;
 
     setMessages((prev) => [
       ...prev,
@@ -168,24 +219,92 @@ export default function MapPage() {
 
     try {
       setIsLoading(true);
-      const refinedRoute = await api.refineRoute(session.sessionId, message, route);
-      setRoute(refinedRoute);
       
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: refinedRoute.summary,
-          timestamp: new Date(),
-        },
-      ]);
+      // Handle saved plans - provide helpful conversational responses
+      if (isViewingsavedPlan) {
+        // Provide intelligent responses based on the user's message
+        const lowerMessage = message.toLowerCase();
+        let response = '';
+
+        if (lowerMessage.includes('change') || lowerMessage.includes('modify') || lowerMessage.includes('edit')) {
+          response = `I can see you'd like to make changes to this saved plan. Since this is a saved plan, I can't directly modify it. However, you have a few options:
+
+1. **Create a new trip** - Start a fresh planning session with your desired changes
+2. **Review your route** - Use the timeline to see all your planned stops
+3. **Take notes** - Make notes about what you'd like to change for your actual trip
+
+Would you like me to help you understand any part of this saved itinerary?`;
+        } else if (lowerMessage.includes('time') || lowerMessage.includes('duration') || lowerMessage.includes('how long')) {
+          const totalStops = route?.stops?.length || 0;
+          response = `This saved plan has ${totalStops} stops across your trip from ${session.startDate} to ${session.endDate}. You can see the estimated time at each attraction in the timeline on the right. The route is optimized to minimize travel time between locations!`;
+        } else if (lowerMessage.includes('cost') || lowerMessage.includes('price') || lowerMessage.includes('budget')) {
+          response = `Great question about costs! While I don't have specific pricing information stored for this saved plan, I can tell you that your itinerary includes ${route?.stops?.length || 0} attractions in ${session.city}. For current pricing and tickets, I recommend checking each attraction's official website before your trip.`;
+        } else if (lowerMessage.includes('restaurant') || lowerMessage.includes('food') || lowerMessage.includes('eat')) {
+          response = `Looking for dining recommendations? Your saved plan focuses on attractions, but ${session.city} has amazing food scenes! For your actual trip, I'd suggest researching local restaurants near each stop. You can also check travel apps like TripAdvisor or Google Maps for real-time recommendations near your planned attractions.`;
+        } else if (lowerMessage.includes('hotel') || lowerMessage.includes('accommodation') || lowerMessage.includes('stay')) {
+          response = `For accommodations in ${session.city}, I recommend looking for hotels central to your planned attractions. Since your trip is from ${session.startDate} to ${session.endDate}, book early for the best rates! Check booking sites like Hotels.com, Booking.com, or Airbnb.`;
+        } else {
+          response = `I'm here to help you understand this saved plan for ${session.city}! Your itinerary includes ${route?.stops?.length || 0} stops. You can:
+
+• Review each stop in the timeline on the right
+• View attractions on the map
+• Ask me questions about timing, activities, or general trip advice
+
+Keep in mind this is a saved plan - to create a new customized itinerary, you can start a new trip planning session from your dashboard. What would you like to know?`;
+        }
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: response,
+            timestamp: new Date(),
+          },
+        ]);
+      } 
+      // Active session without route - provide planning guidance
+      else if (!route) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: `Great question! I can help you plan your trip to ${session.city}. Right now, I've shown you some amazing attractions on the map. Here's what you can do:
+
+1. **Browse the attractions** - Click on the markers to learn more about each place
+2. **Select your favorites** - Click on attractions to add them to your trip (you need at least 2)
+3. **Generate a route** - Once you've selected attractions, click "Generate Route" to create an optimized itinerary
+4. **Refine your plan** - After generating a route, you can chat with me to make adjustments
+
+Is there anything specific you'd like to know about ${session.city}?`,
+            timestamp: new Date(),
+          },
+        ]);
+      } 
+      // Active session with route - refine it via API
+      else {
+        const refinedRoute = await api.refineRoute(session.sessionId, message, route);
+        setRoute(refinedRoute);
+        
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: refinedRoute.summary,
+            timestamp: new Date(),
+          },
+        ]);
+      }
     } catch (error) {
-      console.error('Failed to refine route:', error);
+      console.error('Failed to process message:', error);
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
-          content: 'Sorry, I had trouble refining your route. Please try again.',
+          content: isViewingsavedPlan
+            ? 'Sorry, I had trouble processing your message. Please try asking again!'
+            : route 
+            ? 'Sorry, I had trouble refining your route. Please try again.'
+            : 'Sorry, I had trouble processing your message. Please try again.',
           timestamp: new Date(),
         },
       ]);
@@ -238,6 +357,16 @@ export default function MapPage() {
           <div className="flex items-center gap-3">
             {user && (
               <button
+                onClick={() => router.push('/dashboard')}
+                className="flex items-center gap-2 px-3 py-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-700 font-medium"
+                title="Back to Dashboard"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                <span className="hidden sm:inline">Back</span>
+              </button>
+            )}
+            {user && (
+              <button
                 onClick={() => setShowHistorySidebar(true)}
                 className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
                 title="View Trip History"
@@ -245,16 +374,17 @@ export default function MapPage() {
                 <History className="w-5 h-5 text-slate-600" />
               </button>
             )}
-            <Compass className="w-8 h-8 text-blue-600" />
-            <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                WanderMind
-              </h1>
-              {session && (
-                <p className="text-sm text-slate-600">
-                  {session.city} • {session.startDate} to {session.endDate}
-                </p>
-              )}
+            <div className="flex items-center gap-2">
+              <div>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  WanderMind
+                </h1>
+                {session && (
+                  <p className="text-sm text-slate-600">
+                    {session.city} • {session.startDate} to {session.endDate}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -327,18 +457,8 @@ export default function MapPage() {
                 />
               </div>
 
-              {/* Floating Controls */}
+              {/* Floating Controls - Bottom Center */}
               <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-3 z-[1000]">
-                <button
-                  onClick={() => setShowChat(!showChat)}
-                  className={`glass-effect px-6 py-3 rounded-full font-medium transition-all hover:shadow-xl flex items-center gap-2 ${
-                    showChat ? 'bg-blue-600 text-white' : 'text-slate-700'
-                  }`}
-                >
-                  <MessageSquare className="w-5 h-5" />
-                  Chat
-                </button>
-
                 {!route && (
                   <button
                     onClick={handleGenerateRoute}
@@ -360,7 +480,7 @@ export default function MapPage() {
                 )}
               </div>
 
-              {/* Toggle Chat/Timeline buttons */}
+              {/* Toggle Chat button - Top Left */}
               <div className="absolute left-4 top-4 flex flex-col gap-2 z-[1000]">
                 <button
                   onClick={() => setShowChat(!showChat)}
