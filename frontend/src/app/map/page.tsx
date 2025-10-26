@@ -13,7 +13,7 @@ import {
   ChevronRight,
   ChevronLeft,
   History,
-  Save,
+  Star,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { UserSession, Attraction, TravelRoute, Message } from '@/types';
@@ -377,13 +377,13 @@ export default function MapPage() {
                     <button
                       onClick={handleSavePlan}
                       disabled={isSavingPlan}
-                      className="glass-effect w-12 h-12 rounded-xl flex items-center justify-center text-green-600 hover:shadow-lg transition-all disabled:opacity-50"
+                      className="glass-effect w-12 h-12 rounded-xl flex items-center justify-center text-yellow-500 hover:shadow-lg transition-all disabled:opacity-50"
                       title="Save Plan"
                     >
                       {isSavingPlan ? (
                         <Loader2 className="w-5 h-5 animate-spin" />
                       ) : (
-                        <Save />
+                        <Star className="w-5 h-5 fill-yellow-500" />
                       )}
                     </button>
                   )}
