@@ -84,7 +84,7 @@ export default function PlanHistorySidebar({ isOpen, onClose }: PlanHistorySideb
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[1100]"
           />
 
           {/* Sidebar */}
@@ -93,7 +93,7 @@ export default function PlanHistorySidebar({ isOpen, onClose }: PlanHistorySideb
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 25 }}
-            className="fixed left-0 top-0 bottom-0 w-96 bg-white shadow-2xl z-50 flex flex-col"
+            className="fixed left-0 top-0 bottom-0 w-96 bg-white shadow-2xl z-[1200] flex flex-col"
           >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-5 flex items-center justify-between">
