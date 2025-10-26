@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   History,
   Star,
+  ArrowLeft,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { UserSession, Attraction, TravelRoute, Message } from '@/types';
@@ -238,6 +239,15 @@ export default function MapPage() {
           <div className="flex items-center gap-3">
             {user && (
               <button
+                onClick={() => router.push('/dashboard')}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                title="Back to Dashboard"
+              >
+                <ArrowLeft className="w-5 h-5 text-slate-600" />
+              </button>
+            )}
+            {user && (
+              <button
                 onClick={() => setShowHistorySidebar(true)}
                 className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
                 title="View Trip History"
@@ -245,17 +255,22 @@ export default function MapPage() {
                 <History className="w-5 h-5 text-slate-600" />
               </button>
             )}
-            <Compass className="w-8 h-8 text-blue-600" />
-            <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                WanderMind
-              </h1>
-              {session && (
-                <p className="text-sm text-slate-600">
-                  {session.city} • {session.startDate} to {session.endDate}
-                </p>
-              )}
-            </div>
+            <button
+              onClick={() => router.push(user ? '/dashboard' : '/')}
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+            >
+              <Compass className="w-8 h-8 text-blue-600" />
+              <div>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  WanderMind
+                </h1>
+                {session && (
+                  <p className="text-sm text-slate-600">
+                    {session.city} • {session.startDate} to {session.endDate}
+                  </p>
+                )}
+              </div>
+            </button>
           </div>
 
           <div className="flex items-center gap-2 text-sm text-slate-600">

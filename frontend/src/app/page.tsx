@@ -23,10 +23,10 @@ export default function Home() {
   }>>([]);
   const { user, logout } = useAuth();
 
-  // Redirect logged-in users to onboard page
+  // Redirect logged-in users to dashboard page
   useEffect(() => {
     if (user) {
-      router.push('/onboard');
+      router.push('/dashboard');
     }
   }, [user, router]);
 
