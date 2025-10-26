@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Plus, LogOut, Calendar, MapPin, Clock, Trash2, ChevronRight, Plane } from 'lucide-react';
+import { Plus, LogOut, Calendar, MapPin, Clock, Trash2, ChevronRight, Plane, ArrowUpDown } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
 import Logo from '@/components/Logo';
@@ -26,6 +26,7 @@ export default function Dashboard() {
   const [plans, setPlans] = useState<SavedPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [sortOrder, setSortOrder] = useState<'new-to-old' | 'old-to-new'>('new-to-old');
 
   useEffect(() => {
     // Redirect non-logged-in users to home
@@ -80,6 +81,16 @@ export default function Dashboard() {
     });
   };
 
+  const toggleSortOrder = () => {
+    setSortOrder(prev => prev === 'new-to-old' ? 'old-to-new' : 'new-to-old');
+  };
+
+  const sortedPlans = [...plans].sort((a, b) => {
+    const dateA = new Date(a.savedAt).getTime();
+    const dateB = new Date(b.savedAt).getTime();
+    return sortOrder === 'new-to-old' ? dateB - dateA : dateA - dateB;
+  });
+
   if (!user) {
     return null; // Will redirect in useEffect
   }
@@ -119,15 +130,15 @@ export default function Dashboard() {
             </p>
           </div>
           
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => router.push('/onboard')}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-semibold shadow-lg hover:shadow-xl transition-all"
-          >
-            <Plus className="w-5 h-5" />
-            New Journey
-          </motion.button>
+          {plans.length > 0 && (
+            <button
+              onClick={toggleSortOrder}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-medium transition-all shadow-sm"
+            >
+              <ArrowUpDown className="w-4 h-4" />
+              {sortOrder === 'new-to-old' ? 'Newest First' : 'Oldest First'}
+            </button>
+          )}
         </div>
 
         {/* Plans Grid */}
@@ -139,32 +150,32 @@ export default function Dashboard() {
           <div className="text-center text-red-600 bg-red-50 rounded-2xl p-8">
             {error}
           </div>
-        ) : plans.length === 0 ? (
-          <div className="text-center py-20">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: 'spring', duration: 0.6 }}
-            >
-              <div className="w-24 h-24 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Plane className="w-12 h-12 text-blue-600" />
-              </div>
-            </motion.div>
-            <h3 className="text-2xl font-bold text-slate-900 mb-2">No trips yet</h3>
-            <p className="text-slate-600 mb-6">Start planning your first adventure!</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* New Journey Button - Always First */}
             <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => router.push('/onboard')}
-              className="inline-flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-semibold shadow-lg hover:shadow-xl transition-all"
+              className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border-2 border-dashed border-slate-300 hover:border-blue-400 min-h-[400px] flex flex-col items-center justify-center gap-4 group"
             >
-              <Plus className="w-5 h-5" />
-              Plan Your First Trip
+              <motion.div
+                whileHover={{ rotate: 90 }}
+                transition={{ duration: 0.3 }}
+                className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg group-hover:shadow-xl"
+              >
+                <Plus className="w-10 h-10 text-white" />
+              </motion.div>
+              <div className="text-center">
+                <h3 className="text-xl font-bold text-slate-900 mb-1">New Journey</h3>
+                <p className="text-sm text-slate-500">Start planning your next adventure</p>
+              </div>
             </motion.button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {plans.map((plan, index) => (
+
+            {/* Existing Plans */}
+            {sortedPlans.map((plan, index) => (
               <motion.div
                 key={plan.id}
                 initial={{ opacity: 0, y: 20 }}

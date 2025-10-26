@@ -42,7 +42,7 @@ export default function MapPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(true);
-  const [showChat, setShowChat] = useState(false);
+  const [showChat, setShowChat] = useState(true); // Chat expanded by default
   const [showTimeline, setShowTimeline] = useState(false);
   const [showHistorySidebar, setShowHistorySidebar] = useState(false);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
@@ -240,10 +240,11 @@ export default function MapPage() {
             {user && (
               <button
                 onClick={() => router.push('/dashboard')}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                className="flex items-center gap-2 px-3 py-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-700 font-medium"
                 title="Back to Dashboard"
               >
-                <ArrowLeft className="w-5 h-5 text-slate-600" />
+                <ArrowLeft className="w-5 h-5" />
+                <span className="hidden sm:inline">Back</span>
               </button>
             )}
             {user && (
@@ -255,10 +256,7 @@ export default function MapPage() {
                 <History className="w-5 h-5 text-slate-600" />
               </button>
             )}
-            <button
-              onClick={() => router.push(user ? '/dashboard' : '/')}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-            >
+            <div className="flex items-center gap-2">
               <Compass className="w-8 h-8 text-blue-600" />
               <div>
                 <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
@@ -270,7 +268,7 @@ export default function MapPage() {
                   </p>
                 )}
               </div>
-            </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 text-sm text-slate-600">
@@ -342,18 +340,8 @@ export default function MapPage() {
                 />
               </div>
 
-              {/* Floating Controls */}
+              {/* Floating Controls - Bottom Center */}
               <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-3 z-[1000]">
-                <button
-                  onClick={() => setShowChat(!showChat)}
-                  className={`glass-effect px-6 py-3 rounded-full font-medium transition-all hover:shadow-xl flex items-center gap-2 ${
-                    showChat ? 'bg-blue-600 text-white' : 'text-slate-700'
-                  }`}
-                >
-                  <MessageSquare className="w-5 h-5" />
-                  Chat
-                </button>
-
                 {!route && (
                   <button
                     onClick={handleGenerateRoute}
@@ -375,7 +363,7 @@ export default function MapPage() {
                 )}
               </div>
 
-              {/* Toggle Chat/Timeline buttons */}
+              {/* Toggle Chat button - Top Left */}
               <div className="absolute left-4 top-4 flex flex-col gap-2 z-[1000]">
                 <button
                   onClick={() => setShowChat(!showChat)}
