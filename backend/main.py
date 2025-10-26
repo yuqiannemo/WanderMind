@@ -18,6 +18,7 @@ from auth import (
 
 # Load environment variables
 load_dotenv()
+frontend_url = os.getenv("FRONTEND_URL", "https://wander-mind-steel.vercel.app")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -28,7 +29,7 @@ app = FastAPI(title="WanderMind API")
 # CORS configuration - must be one of the first middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", frontend_url],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With"],
