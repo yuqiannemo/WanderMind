@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mail, Lock, User, AlertCircle } from 'lucide-react';
+import { X, Mail, Lock, User, AlertCircle, LogIn, UserPlus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface AuthModalProps {
@@ -19,6 +19,18 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login, signup } = useAuth();
+
+  // Update mode when initialMode changes and modal is open
+  useEffect(() => {
+    if (isOpen) {
+      setMode(initialMode);
+      // Reset form when switching modes
+      setEmail('');
+      setPassword('');
+      setName('');
+      setError('');
+    }
+  }, [isOpen, initialMode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,18 +88,50 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
             >
-              {/* Header */}
-              <div className="relative bg-gradient-to-br from-blue-600 to-purple-600 px-6 py-8">
-                <button
-                  onClick={onClose}
-                  className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-                <h2 className="text-3xl font-bold text-white mb-2">
+              {/* Header with Tabs */}
+              <div className="bg-gradient-to-br from-blue-600 to-purple-600 px-6 py-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div></div>
+                  <button
+                    onClick={onClose}
+                    className="text-white/80 hover:text-white transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {/* Mode Tabs */}
+                <div className="flex gap-2 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => setMode('login')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-xl font-semibold transition-all ${
+                      mode === 'login'
+                        ? 'bg-white text-blue-600 shadow-lg'
+                        : 'bg-white/20 text-white hover:bg-white/30'
+                    }`}
+                  >
+                    <LogIn className="w-4 h-4" />
+                    Login
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('signup')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-xl font-semibold transition-all ${
+                      mode === 'signup'
+                        ? 'bg-white text-blue-600 shadow-lg'
+                        : 'bg-white/20 text-white hover:bg-white/30'
+                    }`}
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    Sign Up
+                  </button>
+                </div>
+
+                <h2 className="text-2xl font-bold text-white mb-1">
                   {mode === 'login' ? 'Welcome Back' : 'Join WanderMind'}
                 </h2>
-                <p className="text-white/90">
+                <p className="text-white/90 text-sm">
                   {mode === 'login'
                     ? 'Login to access your saved trips'
                     : 'Create an account to save your travel preferences'}

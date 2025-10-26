@@ -48,6 +48,12 @@ export default function Home() {
     setAuthModalOpen(true);
   };
 
+  const closeAuthModal = () => {
+    setAuthModalOpen(false);
+    // Reset to login mode when closing
+    setTimeout(() => setAuthMode('login'), 300);
+  };
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -318,7 +324,7 @@ export default function Home() {
       {/* Auth Modal */}
       <AuthModal
         isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
+        onClose={closeAuthModal}
         initialMode={authMode}
       />
     </div>

@@ -51,8 +51,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('wandermind_user', JSON.stringify(response.user));
     } catch (error: any) {
       console.error('Login error:', error);
-      const message = error.response?.data?.detail || error.message || 'Login failed';
-      throw new Error(message);
+      
+      // Handle Pydantic validation errors (422)
+      if (error.response?.data?.detail) {
+        const detail = error.response.data.detail;
+        
+        // If detail is an array (Pydantic validation errors)
+        if (Array.isArray(detail)) {
+          const errorMessages = detail.map((err: any) => {
+            const field = err.loc?.[1] || err.loc?.[0] || 'field';
+            return `${field}: ${err.msg}`;
+          }).join(', ');
+          throw new Error(errorMessages);
+        }
+        
+        // If detail is a string
+        throw new Error(detail);
+      }
+      
+      throw new Error(error.message || 'Login failed');
     }
   };
 
@@ -66,8 +83,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('wandermind_user', JSON.stringify(response.user));
     } catch (error: any) {
       console.error('Signup error:', error);
-      const message = error.response?.data?.detail || error.message || 'Signup failed';
-      throw new Error(message);
+      
+      // Handle Pydantic validation errors (422)
+      if (error.response?.data?.detail) {
+        const detail = error.response.data.detail;
+        
+        // If detail is an array (Pydantic validation errors)
+        if (Array.isArray(detail)) {
+          const errorMessages = detail.map((err: any) => {
+            const field = err.loc?.[1] || err.loc?.[0] || 'field';
+            return `${field}: ${err.msg}`;
+          }).join(', ');
+          throw new Error(errorMessages);
+        }
+        
+        // If detail is a string
+        throw new Error(detail);
+      }
+      
+      throw new Error(error.message || 'Signup failed');
     }
   };
 
