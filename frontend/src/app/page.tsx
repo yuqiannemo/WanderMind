@@ -23,6 +23,13 @@ export default function Home() {
   }>>([]);
   const { user, logout } = useAuth();
 
+  // Redirect logged-in users to onboard page
+  useEffect(() => {
+    if (user) {
+      router.push('/onboard');
+    }
+  }, [user, router]);
+
   // Generate particles on client side only to avoid hydration mismatch
   useEffect(() => {
     setParticles(
@@ -52,6 +59,21 @@ export default function Home() {
     setAuthModalOpen(false);
     // Reset to login mode when closing
     setTimeout(() => setAuthMode('login'), 300);
+  };
+
+  const handleStartJourney = () => {
+    // Non-logged-in users should see login modal
+    if (!user) {
+      openAuthModal('login');
+    } else {
+      // Logged-in users go to onboard page (this shouldn't happen due to redirect above)
+      router.push('/onboard');
+    }
+  };
+
+  const handleTryDemo = () => {
+    // Anyone can try demo (goes to onboard page without login)
+    router.push('/onboard');
   };
 
   const containerVariants = {
@@ -276,7 +298,7 @@ export default function Home() {
             <motion.button
               whileHover={{ scale: 1.05, boxShadow: "0 20px 40px rgba(0,0,0,0.3)" }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => router.push('/onboard')}
+              onClick={handleStartJourney}
               className="group relative px-8 py-4 bg-white text-purple-900 rounded-2xl font-bold text-lg shadow-2xl overflow-hidden"
             >
               <motion.div
@@ -285,20 +307,23 @@ export default function Home() {
                 whileHover={{ x: 0 }}
                 transition={{ duration: 0.3 }}
               />
-              <span className="relative z-10 flex items-center gap-2 group-hover:text-white transition-colors">
+              <span className="relative z-10 flex items-center gap-2 transition-colors">
                 <Plane className="w-5 h-5" />
                 Start Your Journey
               </span>
             </motion.button>
 
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => router.push('/onboard')}
-              className="px-8 py-4 bg-white/10 backdrop-blur-md border-2 border-white/30 text-white rounded-2xl font-semibold text-lg hover:bg-white/20 transition-all shadow-lg"
-            >
-              Try Demo
-            </motion.button>
+            {/* Try Demo button - only shown for non-logged-in users */}
+            {!user && (
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleTryDemo}
+                className="px-8 py-4 bg-white/10 backdrop-blur-md border-2 border-white/30 text-white rounded-2xl font-semibold text-lg hover:bg-white/20 transition-all shadow-lg"
+              >
+                Free Trial
+              </motion.button>
+            )}
           </motion.div>
 
           {/* Subtitle */}
