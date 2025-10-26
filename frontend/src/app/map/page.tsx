@@ -208,24 +208,6 @@ export default function MapPage() {
   const handleSendMessage = async (message: string) => {
     if (!session) return;
 
-    // Disable chat refinement for saved plans (no active backend session)
-    if (isViewingsavedPlan) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'user',
-          content: message,
-          timestamp: new Date(),
-        },
-        {
-          role: 'assistant',
-          content: 'Chat refinement is not available for saved plans. To make changes, please create a new trip plan.',
-          timestamp: new Date(),
-        },
-      ]);
-      return;
-    }
-
     setMessages((prev) => [
       ...prev,
       {
@@ -238,10 +220,50 @@ export default function MapPage() {
     try {
       setIsLoading(true);
       
-      // If no route exists yet, provide general advice and suggestions
-      if (!route) {
-        // For now, provide a helpful response about planning
-        // In the future, this could call a general chat endpoint
+      // Handle saved plans - provide helpful conversational responses
+      if (isViewingsavedPlan) {
+        // Provide intelligent responses based on the user's message
+        const lowerMessage = message.toLowerCase();
+        let response = '';
+
+        if (lowerMessage.includes('change') || lowerMessage.includes('modify') || lowerMessage.includes('edit')) {
+          response = `I can see you'd like to make changes to this saved plan. Since this is a saved plan, I can't directly modify it. However, you have a few options:
+
+1. **Create a new trip** - Start a fresh planning session with your desired changes
+2. **Review your route** - Use the timeline to see all your planned stops
+3. **Take notes** - Make notes about what you'd like to change for your actual trip
+
+Would you like me to help you understand any part of this saved itinerary?`;
+        } else if (lowerMessage.includes('time') || lowerMessage.includes('duration') || lowerMessage.includes('how long')) {
+          const totalStops = route?.stops?.length || 0;
+          response = `This saved plan has ${totalStops} stops across your trip from ${session.startDate} to ${session.endDate}. You can see the estimated time at each attraction in the timeline on the right. The route is optimized to minimize travel time between locations!`;
+        } else if (lowerMessage.includes('cost') || lowerMessage.includes('price') || lowerMessage.includes('budget')) {
+          response = `Great question about costs! While I don't have specific pricing information stored for this saved plan, I can tell you that your itinerary includes ${route?.stops?.length || 0} attractions in ${session.city}. For current pricing and tickets, I recommend checking each attraction's official website before your trip.`;
+        } else if (lowerMessage.includes('restaurant') || lowerMessage.includes('food') || lowerMessage.includes('eat')) {
+          response = `Looking for dining recommendations? Your saved plan focuses on attractions, but ${session.city} has amazing food scenes! For your actual trip, I'd suggest researching local restaurants near each stop. You can also check travel apps like TripAdvisor or Google Maps for real-time recommendations near your planned attractions.`;
+        } else if (lowerMessage.includes('hotel') || lowerMessage.includes('accommodation') || lowerMessage.includes('stay')) {
+          response = `For accommodations in ${session.city}, I recommend looking for hotels central to your planned attractions. Since your trip is from ${session.startDate} to ${session.endDate}, book early for the best rates! Check booking sites like Hotels.com, Booking.com, or Airbnb.`;
+        } else {
+          response = `I'm here to help you understand this saved plan for ${session.city}! Your itinerary includes ${route?.stops?.length || 0} stops. You can:
+
+• Review each stop in the timeline on the right
+• View attractions on the map
+• Ask me questions about timing, activities, or general trip advice
+
+Keep in mind this is a saved plan - to create a new customized itinerary, you can start a new trip planning session from your dashboard. What would you like to know?`;
+        }
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: response,
+            timestamp: new Date(),
+          },
+        ]);
+      } 
+      // Active session without route - provide planning guidance
+      else if (!route) {
         setMessages((prev) => [
           ...prev,
           {
@@ -257,8 +279,9 @@ Is there anything specific you'd like to know about ${session.city}?`,
             timestamp: new Date(),
           },
         ]);
-      } else {
-        // Route exists, refine it based on the user's message
+      } 
+      // Active session with route - refine it via API
+      else {
         const refinedRoute = await api.refineRoute(session.sessionId, message, route);
         setRoute(refinedRoute);
         
@@ -277,7 +300,9 @@ Is there anything specific you'd like to know about ${session.city}?`,
         ...prev,
         {
           role: 'assistant',
-          content: route 
+          content: isViewingsavedPlan
+            ? 'Sorry, I had trouble processing your message. Please try asking again!'
+            : route 
             ? 'Sorry, I had trouble refining your route. Please try again.'
             : 'Sorry, I had trouble processing your message. Please try again.',
           timestamp: new Date(),
@@ -409,8 +434,6 @@ Is there anything specific you'd like to know about ${session.city}?`,
                 messages={messages}
                 onSendMessage={handleSendMessage}
                 isLoading={isLoading}
-                disabled={isViewingsavedPlan}
-                disabledMessage="You're viewing a saved plan. Chat refinement is only available for active trip planning sessions."
               />
             </motion.div>
           )}
